@@ -6,36 +6,29 @@
 * Related Document: See README.md
 *
 *******************************************************************************
-* Copyright 2025, Cypress Semiconductor Corporation (an Infineon company) or
-* an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
-*
-* This software, including source code, documentation and related
-* materials ("Software") is owned by Cypress Semiconductor Corporation
-* or one of its affiliates ("Cypress") and is protected by and subject to
-* worldwide patent protection (United States and foreign),
-* United States copyright laws and international treaty provisions.
-* Therefore, you may use this Software only as provided in the license
-* agreement accompanying the software package from which you
-* obtained this Software ("EULA").
-* If no EULA applies, Cypress hereby grants you a personal, non-exclusive,
-* non-transferable license to copy, modify, and compile the Software
-* source code solely for use in connection with Cypress's
-* integrated circuit products.  Any reproduction, modification, translation,
-* compilation, or representation of this Software except as specified
-* above is prohibited without the express written permission of Cypress.
-*
-* Disclaimer: THIS SOFTWARE IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, NONINFRINGEMENT, IMPLIED
-* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Cypress
-* reserves the right to make changes to the Software without notice. Cypress
-* does not assume any liability arising out of the application or use of the
-* Software or any product or circuit described in the Software. Cypress does
-* not authorize its products for use in any products where a malfunction or
-* failure of the Cypress product may reasonably be expected to result in
-* significant property damage, injury or death ("High Risk Product"). By
-* including Cypress's product in a High Risk Product, the manufacturer
-* of such system or application assumes all risk of such use and in doing
-* so agrees to indemnify Cypress against all liability.
+* (c) 2025-2025, Infineon Technologies AG, or an affiliate of Infineon Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is owned by
+* Infineon Technologies AG or one of its affiliates ("Infineon") and is protected
+* by and subject to worldwide patent protection, worldwide copyright laws, and
+* international treaty provisions. Therefore, you may use this Software only as
+* provided in the license agreement accompanying the software package from which
+* you obtained this Software. If no license agreement applies, then any use,
+* reproduction, modification, translation, or compilation of this Software is
+* prohibited without the express written permission of Infineon.
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING,
+* BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF THIRD-PARTY RIGHTS AND
+* IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A SPECIFIC USE/PURPOSE OR
+* MERCHANTABILITY. Infineon reserves the right to make changes to the Software
+* without notice. You are responsible for properly designing, programming, and
+* testing the functionality and safety of your intended application of the
+* Software, as well as complying with any legal requirements related to its
+* use. Infineon does not guarantee that the Software will be free from intrusion,
+* data theft or loss, or other breaches ("Security Breaches"), and Infineon
+* shall have no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any application
+* where a failure of the Product or any consequences of the use thereof can
+* reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 #ifdef IM_ENABLE_SHT4X
@@ -58,32 +51,41 @@
 /* At 200Hz/4 = 50 Hz chunk frequency */
 #define MAX_FRAMES_IN_CHUNK   (4)
 
-/* Humidity, Temerature */
+/* Humidity, Temperature */
 #define SENSOR_COUNT          (2)
+
+#define HUMIDITY_TIMER_INT_PRIORITY       (3U)
+
+typedef enum 
+{
+SHT40_IDLE,
+SHT40_MEASURING,
+SHT40_READY
+} sht40_state_t;
 
 /*******************************************************************************
 * Types
 *******************************************************************************/
 
 typedef enum {
-    /* Both humidty and temprature are in the same stream.
+    /* Both humidity and temperature are in the same stream.
      * The shape of each frame will be [2,1] as
      * Stream 0: {{HUMIDITY}, {TEMPERATURE}} */
     SHT4X_MODE_STREAM_COMBINED = 0,
 
-    /* The humidty and temprature are split in two separate streams
+    /* The humidity and temperature are split in two separate streams
      * each with the shape [1] as
      * Stream 0: {HUMIDITY}
      * Stream 1: {TEMPERATURE}
      */
     SHT4X_MODE_STREAM_SPLIT = 3,
 
-    /* Only the humidty is enabled.
+    /* Only the humidity is enabled.
      * Stream 0: {HUMIDITY}
      */
     SHT4X_MODE_STREAM_ONLY_HUMIDITY = 1,
 
-    /* Only the temprature is enabled.
+    /* Only the temperature is enabled.
      * Stream 0: {TEMPERATURE}
      */
     SHT4X_MODE_STREAM_ONLY_TEMP = 2,
@@ -136,21 +138,33 @@ typedef struct {
     /* data reading precision */
     precision_t precison;
 
-
 } dev_sht4x_t;
 
 /*******************************************************************************
  * Global Variables
  ******************************************************************************/
+cy_stc_sysint_t humidity_timer_irq_cfg =
+{
+    .intrSrc = CYBSP_GENERAL_HUMIDITY_TIMER_IRQ,
+    .intrPriority = HUMIDITY_TIMER_INT_PRIORITY
+};
 
-/*SHT40T sensor address*/
+/*SHT40 sensor address*/
 mtb_sht40_address_t sht40_address;
+
+/*SHT40 sensor state*/
+static sht40_state_t sht40_state = SHT40_IDLE;
 
 /*******************************************************************************
 * Function Prototypes
 *******************************************************************************/
+void humidity_timer_isr(void);
 
-static float _milli_to_1(int32_t val);
+void humidity_timer_init(void);
+
+void sht4x_start_measurement(uint8_t cmd, uint32_t delay_us);
+
+static float _convert_milli_to_unit(int32_t val);
 
 static bool _init_hw(dev_sht4x_t *dev, mtb_hal_i2c_t* i2c);
 
@@ -182,14 +196,101 @@ static bool _write_payload(
 /*******************************************************************************
 * Function Definitions
 *******************************************************************************/
-
-/*******************************************************************************
-* Function Name: _milli_to_1
+/******************************************************************************
+* Function Name: humidity_timer_isr
 ********************************************************************************
 * Summary:
-*   This function converts milli to 1
+*   Initializes timer isr
+*
+* Parameters:
+*   
+*
+* Return:
+*   None
+*
 *******************************************************************************/
-static float _milli_to_1(int32_t val)
+void humidity_timer_isr(void)
+{
+     uint32_t intrMask = Cy_TCPWM_GetInterruptStatus(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM);
+     Cy_TCPWM_ClearInterrupt(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM, intrMask);
+
+     if (intrMask & CY_TCPWM_INT_ON_TC)
+     {
+        /*stop one-shot*/ 
+        Cy_TCPWM_PWM_Disable(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM);
+        /*Updating SHT40 sensor state to SHT40_READY */
+        sht40_state = SHT40_READY;
+     } 
+}
+
+/******************************************************************************
+* Function Name: sht4x_start_measurement
+********************************************************************************
+* Summary:
+*  start reading the humidity sensor
+*
+* Parameters:
+*  cmd        command based on precision
+*  delay_us   delay based on read command selected
+*
+* Return:
+*   None
+*
+*******************************************************************************/
+void sht4x_start_measurement(uint8_t cmd, uint32_t delay_us)
+{
+    /*Send the measurement command*/
+    mtb_sht4x_measurement_init(cmd);
+    
+    /*Configure one-shot timer for conversion time*/ 
+    Cy_TCPWM_PWM_Disable(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM);
+    Cy_TCPWM_Counter_SetPeriod(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM, (delay_us - 1)); // at 1 MHz = 1 tick = 1us
+    Cy_TCPWM_PWM_Enable(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM);
+    Cy_TCPWM_TriggerStart_Single(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM);
+
+    /*Updating SHT40 sensor state to SHT40_MEASURING */    
+    sht40_state = SHT40_MEASURING; 
+}
+
+/******************************************************************************
+* Function Name: humidity_timer_init
+********************************************************************************
+* Summary:
+*   Initializes timer for humidity sensor reading
+*
+* Parameters:
+*   
+*
+* Return:
+*   None
+*
+*******************************************************************************/
+void humidity_timer_init(void)
+{
+    Cy_TCPWM_Counter_Init(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM, &CYBSP_GENERAL_HUMIDITY_TIMER_config);
+    /*hook ISR*/
+    Cy_SysInt_Init(&humidity_timer_irq_cfg, &humidity_timer_isr);
+
+    NVIC_EnableIRQ(CYBSP_GENERAL_HUMIDITY_TIMER_IRQ); 
+    Cy_TCPWM_Counter_Enable(CYBSP_GENERAL_HUMIDITY_TIMER_HW, CYBSP_GENERAL_HUMIDITY_TIMER_NUM);
+    
+}
+
+/******************************************************************************
+* Function Name: _convert_milli_to_unit
+********************************************************************************
+* Summary:
+*   This function converts milli to standard unit
+*   eg. milli RH to RH and milli Degrees C to Degrees C
+*
+* Parameters:
+*   val        value in milli unit
+*
+* Return:
+*   unit value
+*
+*******************************************************************************/
+static float _convert_milli_to_unit(int32_t val)
 {
     return ((float)val/1000.0 );
 }
@@ -216,6 +317,7 @@ static bool _init_hw(dev_sht4x_t *dev, mtb_hal_i2c_t* i2c)
     sht40_address = MTB_SHT40_ADDRESS_DEFAULT;
 
     result = mtb_sht4x_init(i2c,sht40_address);
+    humidity_timer_init();
     if(CY_RSLT_SUCCESS == result)
     {
         printf("SHT4X: Initialized device.\r\n");
@@ -293,43 +395,57 @@ static bool _read_hw(dev_sht4x_t* dev, mtb_hal_i2c_t* i2c)
 
     int32_t temperature = 0;
     int32_t humidity = 0;
-
-    if(dev->precison == HIGH_PRECISION)
+    
+    if(sht40_state == SHT40_IDLE)
     {
-        mtb_sht4x_measure_high_precision(i2c, &temperature, &humidity);
-    }
+        if(dev->precison == HIGH_PRECISION)
+        {
+            /* Start high-precision measurement, delay 10,000 usec. */
+            sht4x_start_measurement(CMD_HIGH_PRECISION, 10000);
+        }
 
-    if(dev->precison == MEDIUM_PRECISION)
+        if(dev->precison == MEDIUM_PRECISION)
+        {
+            /* Start medium-precision measurement, delay 5,000 usec. */         
+           sht4x_start_measurement(CMD_MED_PRECISION, 5000);
+        }
+
+        if(dev->precison == LOW_PRECISION)
+        {
+            /* Start low-precision measurement, delay 2,000 usec. */                
+           sht4x_start_measurement(CMD_LOW_PRECISION, 2000);
+        }
+    
+    }
+    
+    if (sht40_state == SHT40_READY)
     {
-        mtb_sht4x_measure_medium_precision(i2c, &temperature, &humidity);
+        /* read the sensor */   
+        mtb_sht4x_measure_nonblocking(&temperature, &humidity);
+    
+        if(dev->stream_mode == SHT4X_MODE_STREAM_COMBINED)
+        {
+           float *dest = dev->data_combined + dev->frames_sampled * SENSOR_COUNT;
+           *dest++ = _convert_milli_to_unit(humidity);
+           *dest++ = _convert_milli_to_unit(temperature);
+        }
+
+        if(dev->stream_mode == SHT4X_MODE_STREAM_SPLIT || dev->stream_mode == SHT4X_MODE_STREAM_ONLY_HUMIDITY)
+        {
+           float *dest = dev->humidity_data + dev->frames_sampled ;
+           *dest++ = _convert_milli_to_unit(humidity);
+        }
+
+        if(dev->stream_mode == SHT4X_MODE_STREAM_SPLIT || dev->stream_mode == SHT4X_MODE_STREAM_ONLY_TEMP)
+        {
+           float *dest = dev->temperature_data + dev->frames_sampled ;
+           *dest++ = _convert_milli_to_unit(temperature);
+        }
+
+        dev->frames_sampled++;
+        /*Updating SHT40 sensor state to SHT40_IDLE */
+        sht40_state = SHT40_IDLE;
     }
-
-    if(dev->precison == LOW_PRECISION)
-    {
-        mtb_sht4x_measure_low_precision(i2c, &temperature, &humidity);
-    }
-
-    if(dev->stream_mode == SHT4X_MODE_STREAM_COMBINED)
-    {
-        float *dest = dev->data_combined + dev->frames_sampled * SENSOR_COUNT;
-        *dest++ = _milli_to_1(humidity);
-        *dest++ = _milli_to_1(temperature);
-    }
-
-    if(dev->stream_mode == SHT4X_MODE_STREAM_SPLIT || dev->stream_mode == SHT4X_MODE_STREAM_ONLY_HUMIDITY)
-    {
-        float *dest = dev->humidity_data + dev->frames_sampled ;
-        *dest++ = _milli_to_1(humidity);
-    }
-
-    if(dev->stream_mode == SHT4X_MODE_STREAM_SPLIT || dev->stream_mode == SHT4X_MODE_STREAM_ONLY_TEMP)
-    {
-        float *dest = dev->temperature_data + dev->frames_sampled ;
-        *dest++ = _milli_to_1(temperature);
-    }
-
-    dev->frames_sampled++;
-
     return true;
 }
 
@@ -569,7 +685,7 @@ static void _start_streams(protocol_t* protocol, int device, pb_ostream_t* ostre
     stream_mode_t mode;
     dev_sht4x_t* dev = (dev_sht4x_t*)arg;
     UNUSED(ostream);
-protocol_get_option_oneof(protocol, device, DEV_SHT4X_OPTION_KEY_PRECISION, &precision_index);
+    protocol_get_option_oneof(protocol, device, DEV_SHT4X_OPTION_KEY_PRECISION, &precision_index);
     switch(precision_index)
     {
        case LOW_PRECISION:
@@ -845,7 +961,7 @@ bool dev_sht4x_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
         DEV_SHT4X_OPTION_KEY_PRECISION,
         "Precision",
         "Data reading precision",
-        0,
+        1,
         (const char* []) { "Low","Medium","High" },
         3);
 
@@ -881,3 +997,4 @@ bool dev_sht4x_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
 #endif /* IM_ENABLE_SHT4X */
 
 /* [] END OF FILE */
+

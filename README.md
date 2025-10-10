@@ -2,9 +2,7 @@
 
 This code example demonstrates how to collect data by implementing the [DEEPCRAFT&trade; streaming protocol v2](https://developer.imagimob.com/getting-started/tensor-streaming-protocol/registering-sensors-using-protocolv2) for PSOC&trade; Edge E84 MCU boards, allowing the streaming of sensor data and other information from the board into [DEEPCRAFT&trade; Studio](https://www.imagimob.com/products) over USB for development and testing of Edge AI models.
 
-The code example supports collecting data from different sources utilizing the Cortex&reg;-M55 (CM55) CPU, data can be collected from an inertial measurement unit (IMU - BMI270), magnetometer (BMM350), XENSIV&trade; digital MEMS microphones (IM73D122V01) using pulse-density modulation (PDM) to pulse-code modulation (PCM), XENSIV&trade; digital barometric air pressure sensor (DPS368), digital humidity and temperature sensor (SHT40T), and XENSIV&trade; 60 GHz radar sensor (BGT60TR13C). The data is transmitted using USB to [DEEPCRAFT&trade; Studio](https://www.imagimob.com/products). The data can then be used in [DEEPCRAFT&trade; starter projects](https://developer.imagimob.com/getting-started/starter-project) or to generate a new model. 
-
-> **Note:** The humidity sensor is currently disabled by default, due to inaccurate readings caused by a driver issue. This will be addressed in the next revision of the code example. 
+The code example supports collecting data from different sources utilizing the Cortex&reg;-M55 (CM55) CPU, data can be collected from an inertial measurement unit (IMU - BMI270), magnetometer (BMM350), XENSIV&trade; digital MEMS microphones (IM73D122V01) using pulse-density modulation (PDM) to pulse-code modulation (PCM), XENSIV&trade; digital barometric air pressure sensor (DPS368), digital humidity and temperature sensor (SHT40), and XENSIV&trade; 60 GHz radar sensor (BGT60TR13C). The data is transmitted using USB to [DEEPCRAFT&trade; Studio](https://www.imagimob.com/products). The data can then be used in [DEEPCRAFT&trade; starter projects](https://developer.imagimob.com/getting-started/starter-project) or to generate a new model. 
 
 To deploy a DEEPCRAFT&trade; model onto an Infineon embedded device, see the following code examples:
 
@@ -18,7 +16,7 @@ This code example has a three project structure: CM33 secure, CM33 non-secure, a
 
 [View this README on GitHub.](https://github.com/Infineon/mtb-example-psoc-edge-ml-deepcraft-data-collection)
 
-[Provide feedback on this code example.](https://cypress.co1.qualtrics.com/jfe/form/SV_1NTns53sK2yiljn?Q_EED=eyJVbmlxdWUgRG9jIElkIjoiQ0UyMzkyNDciLCJTcGVjIE51bWJlciI6IjAwMi0zOTI0NyIsIkRvYyBUaXRsZSI6IlBTT0MmdHJhZGU7IEVkZ2UgTUNVOiBNYWNoaW5lIExlYXJuaW5nIOKAkyBERUVQQ1JBRlQmdHJhZGU7IGRhdGEgY29sbGVjdGlvbiIsInJpZCI6Im5pY2hvbGFzIHNoYXJwIiwiRG9jIHZlcnNpb24iOiIyLjAuMCIsIkRvYyBMYW5ndWFnZSI6IkVuZ2xpc2giLCJEb2MgRGl2aXNpb24iOiJNQ0QiLCJEb2MgQlUiOiJJQ1ciLCJEb2MgRmFtaWx5IjoiUFNPQyJ9)
+[Provide feedback on this code example.](https://cypress.co1.qualtrics.com/jfe/form/SV_1NTns53sK2yiljn?Q_EED=eyJVbmlxdWUgRG9jIElkIjoiQ0UyMzkyNDciLCJTcGVjIE51bWJlciI6IjAwMi0zOTI0NyIsIkRvYyBUaXRsZSI6IlBTT0MmdHJhZGU7IEVkZ2UgTUNVOiBNYWNoaW5lIExlYXJuaW5nIOKAkyBERUVQQ1JBRlQmdHJhZGU7IGRhdGEgY29sbGVjdGlvbiIsInJpZCI6Im5pY2hvbGFzIHNoYXJwIiwiRG9jIHZlcnNpb24iOiIyLjEuMCIsIkRvYyBMYW5ndWFnZSI6IkVuZ2xpc2giLCJEb2MgRGl2aXNpb24iOiJNQ0QiLCJEb2MgQlUiOiJJQ1ciLCJEb2MgRmFtaWx5IjoiUFNPQyJ9)
 
 See the [Design and implementation](docs/design_and_implementation.md) for the functional description of this code example.
 
@@ -107,13 +105,13 @@ See [Using the code example](docs/using_the_code_example.md) for instructions on
 
 Kit  |  Available sensors
 :-------- | :-------------
-`KIT_PSE84_AI` | Inertial measurement unit (BMI270), magnetometer (BMM350), XENSIV&trade; digital MEMS microphones (IM73D122V01), XENSIV&trade; digital barometric air pressure sensor (DPS368), digital humidity and temperature sensor (SHT40T), and XENSIV&trade; 60 GHz RADAR sensor (BGT60TR13C) 
+`KIT_PSE84_AI` | Inertial measurement unit (BMI270), magnetometer (BMM350), XENSIV&trade; digital MEMS microphones (IM73D122V01), XENSIV&trade; digital barometric air pressure sensor (DPS368), digital humidity and temperature sensor (SHT40), and XENSIV&trade; 60 GHz RADAR sensor (BGT60TR13C) 
 `KIT_PSE84_EVAL_EPC2` | Inertial measurement unit (BMI270), magnetometer (BMM350), XENSIV&trade; digital MEMS microphones (IM73D122V01)
 `KIT_PSE84_EVAL_EPC4` | Inertial measurement unit (BMI270), magnetometer (BMM350), XENSIV&trade; digital MEMS microphones (IM73D122V01)
 
 > **Note:** <br>
-      1. For step-by-step instructions on collecting data for PSOC&trade; Edge Evaluation Kits, see [DEEPCRAFT&trade; Studio](https://developer.imagimob.com/data-preparation/data-collection/data-collection-using-new-streaming-firmware). <br>
-      2. The website mentiones PSOC&trade; 6 AI kit. However, the same instructions hold good for PSOC&trade; Edge Evaluation kit as well.
+      For step-by-step instructions on collecting data on `KIT_PSE84_AI` and `KIT_PSE84_EVAL_EPC2` / `KIT_PSE84_EVAL_EPC4` kit, see DEEPCRAFT&trade; Studio getting started section for [KIT_PSE84_AI](https://developer.imagimob.com/deepcraft-studio/getting-started/infineon-boards/psoc-edge-e84-ai-kit) , [ KIT_PSE84_EVAL_EPC2/EPC4](https://developer.imagimob.com/deepcraft-studio/getting-started/infineon-boards/psoc-edge-e84-eval-kit) kit respectively. <br>
+
 
 > **Note:**
     To ensure the optimal performance and the data integrity when working with sensors, consider the following guidelines:<br>
@@ -158,7 +156,7 @@ Pattern  |  Error description
 `--.. (pause, repeated)`| Magnetometer error (problem with the BMM350 chip)
 `..-. (pause, repeated)`| Digital pressure/temperature sensor error (problem with the DPS368 chip)
 `-.-. (pause, repeated)`| RADAR error (problem with the BGT60TRxx chip)
-`.--. (pause, repeated)`| Humidity sensor error (problem with the SHT40T chip)
+`.--. (pause, repeated)`| Humidity sensor error (problem with the SHT40 chip)
 `-..- (pause, repeated)`| I3C bus error
 
 
@@ -188,7 +186,8 @@ Document title: *CE239247* – *PSOC&trade; Edge MCU: Machine Learning – DEEPC
  Version | Description of change
  ------- | ---------------------
  1.x.0   | New code example <br> Early access release
- 2.0.0   | GitHub release 
+ 2.0.0   | GitHub release <br>
+ 2.1.0   | Enabled selection of either pressure or temperature or both data while streaming DPS368 sensor data <br>Added support for SHT40 Sensor
 <br>
 
 

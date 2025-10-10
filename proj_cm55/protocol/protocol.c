@@ -951,10 +951,12 @@ int protocol_add_option_blob(
         option->value.blob_type.current_value = NULL;
     }
     else {
+        /* coverity[leaked_storage] */
         pb_bytes_array_t* default_copy = (pb_bytes_array_t*)pmem_malloc(PB_BYTES_ARRAY_T_ALLOCSIZE(default_value->size));
         memcpy(default_copy, default_value, PB_BYTES_ARRAY_T_ALLOCSIZE(default_value->size));
-        option->value.blob_type.default_value = default_value;
+        option->value.blob_type.default_value = default_copy;
 
+        /* coverity[leaked_storage] */
         pb_bytes_array_t* current_copy = (pb_bytes_array_t*)pmem_malloc(PB_BYTES_ARRAY_T_ALLOCSIZE(default_value->size));
         memcpy(current_copy, default_value, PB_BYTES_ARRAY_T_ALLOCSIZE(default_value->size));
         option->value.blob_type.current_value = current_copy;
@@ -1041,10 +1043,12 @@ int protocol_add_option_string(
     }
     else {
         int len = strlen(default_value) + 1;
+        /* coverity[leaked_storage] */
         char* default_copy = (char*)pmem_malloc(len);
         memcpy(default_copy, default_value, len);
-        option->value.string_type.default_value = default_value;
+        option->value.string_type.default_value = default_copy;
 
+        /* coverity[leaked_storage] */
         char* current_copy = (char*)pmem_malloc(len);
         memcpy(current_copy, default_value, len);
         option->value.string_type.current_value = current_copy;

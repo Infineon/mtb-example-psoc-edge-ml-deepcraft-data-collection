@@ -7,7 +7,7 @@
 #
 ################################################################################
 # \copyright
-# Copyright 2025, Cypress Semiconductor Corporation (an Infineon company)
+# (c) 2025-2025, Infineon Technologies AG, or an affiliate of Infineon Technologies AG.
 # SPDX-License-Identifier: Apache-2.0
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,8 +61,7 @@ DEFINES+=IM_ENABLE_BMI270
 DEFINES+=IM_ENABLE_DPS368
 DEFINES+=IM_ENABLE_BMM350
 DEFINES+=IM_ENABLE_BGT60TRXX
-# The humidity sensor is currently disabled by default, due to inaccurate readings caused by a driver issue. This will be addressed in the next revision of the code example.
-#DEFINES+=IM_ENABLE_SHT4X 
+DEFINES+=IM_ENABLE_SHT4X
 endif
 
 ifeq (APP_KIT_PSE84_EVAL_EPC2, $(TARGET))

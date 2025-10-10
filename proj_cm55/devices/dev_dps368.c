@@ -7,53 +7,52 @@
 * Related Document: See README.md
 *
 *******************************************************************************
-* Copyright 2025, Cypress Semiconductor Corporation (an Infineon company) or
-* an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
-*
-* This software, including source code, documentation and related
-* materials ("Software") is owned by Cypress Semiconductor Corporation
-* or one of its affiliates ("Cypress") and is protected by and subject to
-* worldwide patent protection (United States and foreign),
-* United States copyright laws and international treaty provisions.
-* Therefore, you may use this Software only as provided in the license
-* agreement accompanying the software package from which you
-* obtained this Software ("EULA").
-* If no EULA applies, Cypress hereby grants you a personal, non-exclusive,
-* non-transferable license to copy, modify, and compile the Software
-* source code solely for use in connection with Cypress's
-* integrated circuit products.  Any reproduction, modification, translation,
-* compilation, or representation of this Software except as specified
-* above is prohibited without the express written permission of Cypress.
-*
-* Disclaimer: THIS SOFTWARE IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, NONINFRINGEMENT, IMPLIED
-* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Cypress
-* reserves the right to make changes to the Software without notice. Cypress
-* does not assume any liability arising out of the application or use of the
-* Software or any product or circuit described in the Software. Cypress does
-* not authorize its products for use in any products where a malfunction or
-* failure of the Cypress product may reasonably be expected to result in
-* significant property damage, injury or death ("High Risk Product"). By
-* including Cypress's product in a High Risk Product, the manufacturer
-* of such system or application assumes all risk of such use and in doing
-* so agrees to indemnify Cypress against all liability.
+* (c) 2025-2025, Infineon Technologies AG, or an affiliate of Infineon Technologies AG. All rights reserved.
+* This software, associated documentation and materials ("Software") is owned by
+* Infineon Technologies AG or one of its affiliates ("Infineon") and is protected
+* by and subject to worldwide patent protection, worldwide copyright laws, and
+* international treaty provisions. Therefore, you may use this Software only as
+* provided in the license agreement accompanying the software package from which
+* you obtained this Software. If no license agreement applies, then any use,
+* reproduction, modification, translation, or compilation of this Software is
+* prohibited without the express written permission of Infineon.
+* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING,
+* BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF THIRD-PARTY RIGHTS AND
+* IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A SPECIFIC USE/PURPOSE OR
+* MERCHANTABILITY. Infineon reserves the right to make changes to the Software
+* without notice. You are responsible for properly designing, programming, and
+* testing the functionality and safety of your intended application of the
+* Software, as well as complying with any legal requirements related to its
+* use. Infineon does not guarantee that the Software will be free from intrusion,
+* data theft or loss, or other breaches ("Security Breaches"), and Infineon
+* shall have no liability arising out of any Security Breaches. Unless otherwise
+* explicitly approved by Infineon, the Software may not be used in any application
+* where a failure of the Product or any consequences of the use thereof can
+* reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 #ifdef IM_ENABLE_DPS368
 
-#include <stdio.h>
 #include <cybsp.h>
-#include <mtb_xensiv_dps3xx.h>
+#include <stdio.h>
 #include "protocol/protocol.h"
 #include "protocol/pb_encode.h"
 #include "clock.h"
 #include "dev_dps368.h"
+#include <mtb_xensiv_dps3xx.h>
 #include "common.h"
 
 /*******************************************************************************
 * Macros
 *******************************************************************************/
-#define DPS_OPTION_KEY_FREQUENCY 1
+#define DPS_OPTION_KEY_FREQUENCY    (1)
+#define DPS_OPTION_KEY_STREAM_MODE  (2)
+
+#define MAX_FRAMES_IN_CHUNK   (4)
+
+/* Pressure, Temerature */
+#define SENSOR_COUNT          (2)
 
 #ifdef IM_XSS_DPS368
 #define DPS368_ADDRESS (XENSIV_DPS3XX_I2C_ADDR_ALT)
@@ -66,33 +65,100 @@
 #define XENSIV_DPS3XX_CFG_REG_ADDR                  (0x09)
 #define XENSIV_DPS3XX_CFG_TMP_SHIFT_EN_SET_VAL      (0x08)
 #define XENSIV_DPS3XX_CFG_PRS_SHIFT_EN_SET_VAL      (0x04)
-
 /*******************************************************************************
 * Types
 *******************************************************************************/
+
+typedef enum {
+    /* Both pressure and temprature are in the same stream.
+     * The shape of each frame will be [2,1] as
+     * Stream 0: {{Pressure}, {TEMPERATURE}} */
+    DPS_MODE_STREAM_COMBINED = 0,
+
+    /* The pressure and temprature are split in two separate streams
+     * each with the shape [1] as
+     * Stream 0: {Pressure}
+     * Stream 1: {TEMPERATURE}
+     */
+    DPS_MODE_STREAM_SPLIT = 3,
+
+    /* Only the pressure is enabled.
+     * Stream 0: {Pressure}
+     */
+    DPS_MODE_STREAM_ONLY_PRESSURE = 1,
+
+    /* Only the temprature is enabled.
+     * Stream 0: {TEMPERATURE}
+     */
+    DPS_MODE_STREAM_ONLY_TEMP = 2,
+} stream_mode_t;
+
+
 typedef struct {
-    float data_buffer[2];
-    int dropped;
+
     xensiv_dps3xx_t dps3xx;
+    mtb_hal_i2c_t* i2c;
+    /* Tick of last sample */
     clock_tick_t sample_time_tick;
+
+    /* The sample period in ticks */
     uint32_t period_tick;
+
+    union {
+        struct {
+            /*When mode is DPS_MODE_STREAM_SPLIT or DPS_MODE_STREAM_ONLY_XXX*/
+            /* Converted data as hPa */
+            float pressure_data[MAX_FRAMES_IN_CHUNK];
+
+            /* Converted data as degrees */
+            float temperature_data[MAX_FRAMES_IN_CHUNK];
+        };
+
+        /*When mode is DPS_MODE_STREAM_COMBINED*/
+        float data_combined[MAX_FRAMES_IN_CHUNK * SENSOR_COUNT];
+    };
+
+    /* Number of frames collected in Pressure_data and temperature_data. */
+    /* Cleared after each sent data-chunk. Equal or less than frames_in_chunk */
+    int frames_sampled;
+
+    /* Max number of frames in each chunk. Is less or equal to MAX_FRAMES_IN_CHUNK*/
+    int frames_target;
+
+    /* Number of frames dropped. This is cleared each data-chunk. */
+    int frames_dropped;
+
+    /* How streams are presented. */
+    stream_mode_t stream_mode;
+
 } dev_dps368_t;
 
 /*******************************************************************************
  * Global Variables
  ******************************************************************************/
-/*i2c context*/
-mtb_hal_i2c_t* i2c_context;
+
 
 /*******************************************************************************
 * Function Prototypes
 *******************************************************************************/
 static bool _init_hw(dev_dps368_t* dps, mtb_hal_i2c_t* i2c);
-static bool _config_hw(dev_dps368_t* dps, int rate);
+
+static bool _config_hw(dev_dps368_t* dps, int rate, stream_mode_t mode, mtb_hal_i2c_t* i2c);
+
+static bool _read_hw(dev_dps368_t* dps, mtb_hal_i2c_t* i2c);
 
 static bool _configure_streams(protocol_t* protocol, int device, void* arg);
+
 static void _start_streams(protocol_t* protocol, int device, pb_ostream_t* ostream, void* arg);
+
 static void _stop_streams(protocol_t* protocol, int device, pb_ostream_t* ostream, void* arg);
+
+static void _poll_streams(
+        protocol_t* protocol,
+        int device,
+        pb_ostream_t* ostream,
+        void* arg);
+
 static bool _write_payload(
     protocol_t* protocol,
     int device_id,
@@ -101,14 +167,13 @@ static bool _write_payload(
     int total_bytes,
     pb_ostream_t* ostream,
     void* arg);
-static void _poll_streams(protocol_t* protocol, int device, pb_ostream_t* ostream, void* arg);
+
 static bool disable_shift( dev_dps368_t* dps );
 static bool enable_shift( dev_dps368_t* dps );
 
 /*******************************************************************************
 * Function Definitions
 *******************************************************************************/
-
 /*******************************************************************************
 * Function Name: enable_shift
 ********************************************************************************
@@ -172,7 +237,7 @@ static bool disable_shift(dev_dps368_t* dps)
 
 }
 
-/*******************************************************************************
+/******************************************************************************
 * Function Name: _init_hw
 ********************************************************************************
 * Summary:
@@ -189,7 +254,9 @@ static bool disable_shift(dev_dps368_t* dps)
 static bool _init_hw(dev_dps368_t* dps, mtb_hal_i2c_t* i2c)
 {
     cy_rslt_t result;
-
+    dps->i2c=i2c;
+    dps->stream_mode = DPS_MODE_STREAM_COMBINED;
+    
     /* Initialize pressure sensor */
     result = mtb_xensiv_dps3xx_init_i2c(&dps->dps3xx, i2c, DPS368_ADDRESS);
     if(CY_RSLT_SUCCESS == result)
@@ -203,7 +270,7 @@ static bool _init_hw(dev_dps368_t* dps, mtb_hal_i2c_t* i2c)
     }
 }
 
-/*******************************************************************************
+/******************************************************************************
 * Function Name: _config_hw
 ********************************************************************************
 * Summary:
@@ -217,13 +284,14 @@ static bool _init_hw(dev_dps368_t* dps, mtb_hal_i2c_t* i2c)
 *   True if configuration is successful, otherwise false.
 *
 *******************************************************************************/
-static bool _config_hw(dev_dps368_t* dps, int rate)
+static bool _config_hw(dev_dps368_t* dps, int rate, stream_mode_t mode, mtb_hal_i2c_t* i2c)
 {
+    dps->stream_mode = mode;
     cy_rslt_t result;
     xensiv_dps3xx_config_t config;
 
-    /*Clear data*/
-    memset(&dps->data_buffer, 0, sizeof(float) * 2);
+    float pressure = 0;
+    float temperature = 0;
 
     /* Gets the current configuration parameters. */
     result = xensiv_dps3xx_get_config(&dps->dps3xx, &config);
@@ -293,16 +361,69 @@ static bool _config_hw(dev_dps368_t* dps, int rate)
     /* Poll and read out data to clear it from some junk.
     * Perhaps the sensor isn't ready?
     */
-    xensiv_dps3xx_read(&dps->dps3xx, &dps->data_buffer[0], &dps->data_buffer[1]);
-    xensiv_dps3xx_read(&dps->dps3xx, &dps->data_buffer[0], &dps->data_buffer[1]);
-    xensiv_dps3xx_read(&dps->dps3xx, &dps->data_buffer[0], &dps->data_buffer[1]);
+    xensiv_dps3xx_read(&dps->dps3xx, &pressure, &temperature);
+    xensiv_dps3xx_read(&dps->dps3xx, &pressure, &temperature);
+    xensiv_dps3xx_read(&dps->dps3xx, &pressure, &temperature);
 
-    printf("dps368: Configured device. rate=%d Hz\r\n", rate);
+    printf("dps368: Configured device. rate=%d Hz, mode=%i\r\n", rate, dps->stream_mode);
 
     return true;
 }
 
-/*******************************************************************************
+/******************************************************************************
+* Function Name: _read_hw
+********************************************************************************
+* Summary:
+*   Reads the current DPS368 data and convert it.
+*
+* Parameters:
+*   dps: Pointer to the dps368 device handle.
+*
+* Return:
+*   True if data retrieval is successful, otherwise false.
+*
+*******************************************************************************/
+static bool _read_hw(dev_dps368_t* dps, mtb_hal_i2c_t* i2c)
+{
+    float pressure = 0;
+    float temperature = 0;
+    
+    uint8_t read_reg_addr = XENSIV_DPS3XX_PSR_TMP_READ_REG_ADDR;
+    uint8_t read_reg_len = XENSIV_DPS3XX_PSR_TMP_READ_LEN;
+    uint8_t raw_value[XENSIV_DPS3XX_PSR_TMP_READ_LEN];
+
+    mtb_xensiv_dps3xx_reg_read(&dps->dps3xx, read_reg_addr, raw_value, read_reg_len);
+
+    int32_t press_raw = (int32_t)(raw_value[2]) + (raw_value[1] << 8) + (raw_value[0] << 16);
+    int32_t temp_raw = (int32_t)(raw_value[5]) + (raw_value[4] << 8) + (raw_value[3] << 16);
+    pressure = mtb_xensiv_dps3xx_calc_pressure(&dps->dps3xx, press_raw);
+    temperature = mtb_xensiv_dps3xx_calc_temperature(&dps->dps3xx, temp_raw);
+
+    if(dps->stream_mode == DPS_MODE_STREAM_COMBINED)
+    {
+        float *dest = dps->data_combined + dps->frames_sampled * SENSOR_COUNT;
+        *dest++ = pressure;
+        *dest++ = temperature;
+    }
+
+    if(dps->stream_mode == DPS_MODE_STREAM_SPLIT || dps->stream_mode == DPS_MODE_STREAM_ONLY_PRESSURE)
+    {
+        float *dest = dps->pressure_data + dps->frames_sampled ;
+        *dest++ = pressure;
+    }
+
+    if(dps->stream_mode == DPS_MODE_STREAM_SPLIT || dps->stream_mode == DPS_MODE_STREAM_ONLY_TEMP)
+    {
+         float *dest = dps->temperature_data + dps->frames_sampled ;
+        *dest++ = temperature;
+    }
+
+    dps->frames_sampled++;
+
+    return true;
+}
+
+/******************************************************************************
 * Function Name: _configure_streams
 ********************************************************************************
 * Summary:
@@ -315,14 +436,22 @@ static bool _config_hw(dev_dps368_t* dps, int rate)
 *
 *  Return:
 *    True to keep the connection open, false to close.
-*
+
 *******************************************************************************/
 static bool _configure_streams(protocol_t* protocol, int device, void* arg)
 {
+    int result;
     int rate_index;
     int rate;
     int status;
-    dev_dps368_t* dps = (dev_dps368_t*)arg;
+    int mode_index;
+    stream_mode_t mode;
+    const char *stream0_unit;
+    const char *stream1_unit;
+    const char *stream0_name;
+    const char *stream1_name;
+    int stream0;
+    int stream1;
 
     status = protocol_get_option_oneof(protocol, device, DPS_OPTION_KEY_FREQUENCY, &rate_index);
 
@@ -346,74 +475,164 @@ static bool _configure_streams(protocol_t* protocol, int device, void* arg)
         default: return false;
     }
 
-    if(protocol_clear_streams(protocol, device) != PROTOCOL_STATUS_SUCCESS)
+    if(protocol_get_option_oneof(protocol, device, DPS_OPTION_KEY_STREAM_MODE, &mode_index) != PROTOCOL_STATUS_SUCCESS)
     {
         protocol_set_device_status(
-                protocol,
-                device,
-                protocol_DeviceStatus_DEVICE_STATUS_ERROR,
-                "Failed to clear streams.");
+            protocol,
+            device,
+            protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+            "Failed to get option stream mode.");
         return true;
     }
 
-    int stream = protocol_add_stream(
-        protocol,
-        device,
-        "Data",
-        protocol_StreamDirection_STREAM_DIRECTION_OUTPUT,
-        protocol_DataType_DATA_TYPE_F32,
-        rate,
-        1,
-        NULL);
-
-    if(stream < 0)
-    {
+    /* Clear any existing streams */
+    if(protocol_clear_streams(protocol, device) != PROTOCOL_STATUS_SUCCESS) {
         protocol_set_device_status(
+            protocol,
+            device,
+            protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+            "Failed to clear streams.");
+        return true;
+    }
+
+    switch(mode_index)
+    {
+       case 0:
+           mode = DPS_MODE_STREAM_COMBINED;
+           stream0_unit = "hPa \xc2\xb2, \xc2\xb0 degC"; // hPa , Degrees C
+           stream1_unit = NULL;
+           stream0_name = "Combined";
+           stream1_name = NULL;
+           break;
+       case 1:
+           mode = DPS_MODE_STREAM_SPLIT;
+           stream0_unit = "hPa \xc2\xb2";         // hPa
+           stream1_unit = "\xc2\xb0 degC";         // Degrees C
+           stream0_name = "Pressure";
+           stream1_name = "Temperature";
+           break;
+       case 2:
+           mode = DPS_MODE_STREAM_ONLY_PRESSURE;
+           stream0_unit = "hPa \xc2\xb2";         // hPa
+           stream0_name = "Pressure";
+           stream1_name = NULL;
+           break;
+       case 3:
+           mode = DPS_MODE_STREAM_ONLY_TEMP;
+           stream0_unit = "\xc2\xb0 degC";         // Degrees C
+           stream1_unit = NULL;
+           stream0_name = "Temperature";
+           stream1_name = NULL;
+           break;
+       default: return false;
+    }
+
+    /* Add stream #0 */
+    stream0 = protocol_add_stream(
+           protocol,
+           device,
+           stream0_name,
+           protocol_StreamDirection_STREAM_DIRECTION_OUTPUT,
+           protocol_DataType_DATA_TYPE_F32,
+           rate,
+           1,
+           stream0_unit);
+    if(stream0 < 0) {
+        protocol_set_device_status(
+            protocol,
+            device,
+            protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+            "Failed to add streams.");
+        return true;
+    }
+
+    if(mode == DPS_MODE_STREAM_COMBINED)
+    {
+        result = protocol_add_stream_rank(
+            protocol,
+            device,
+            stream0,
+            "Sensor",
+            2,
+            (const char* []) { "Pressure", "Temperature" });
+
+        if(result != PROTOCOL_STATUS_SUCCESS)
+        {
+            protocol_set_device_status(
+                protocol,
+                device,
+                protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+                "Failed to add streams dimension.");
+            return true;
+        }
+    }
+
+    /* Add optional stream #1 */
+    if(stream1_name != NULL)
+    {
+        stream1 = protocol_add_stream(
+           protocol,
+           device,
+           stream1_name,
+           protocol_StreamDirection_STREAM_DIRECTION_OUTPUT,
+           protocol_DataType_DATA_TYPE_F32,
+           rate,
+           1,
+           stream1_unit);
+        if(stream1 < 0)
+         {
+            protocol_set_device_status(
                 protocol,
                 device,
                 protocol_DeviceStatus_DEVICE_STATUS_ERROR,
                 "Failed to add streams.");
+            return true;
+        }
+
+        result = protocol_add_stream_rank(
+            protocol,
+            device,
+            stream1,
+            "Channel",
+            1,
+            (const char* []) { "Pressure" });
+        if(result != PROTOCOL_STATUS_SUCCESS)
+        {
+            protocol_set_device_status(
+                protocol,
+                device,
+                protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+                "Failed to add streams dimension.");
+            return true;
+        }
+    }
+
+    result = protocol_add_stream_rank(
+        protocol,
+            device,
+            stream0,
+            "Channel",
+            1,
+            (const char* []) { "Temperature"});
+    if(result != PROTOCOL_STATUS_SUCCESS) {
+        protocol_set_device_status(
+            protocol,
+            device,
+            protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+            "Failed to add streams dimension.");
         return true;
     }
 
-    status = protocol_add_stream_rank(
-            protocol,
-            device,
-            stream,
-            "Channel",
-            2,
-            (const char* []) { "Pressure", "Temp" });
+    protocol_set_device_status(
+        protocol,
+        device,
+        protocol_DeviceStatus_DEVICE_STATUS_READY,
+        "Device is ready.");
 
-    if(status != PROTOCOL_STATUS_SUCCESS)
-    {
-       protocol_set_device_status(
-                    protocol,
-                    device,
-                    protocol_DeviceStatus_DEVICE_STATUS_ERROR,
-                    "Failed to add stream dimension.");
-       return true;
-    }
-
-    if(!_config_hw(dps, rate))
-    {
-        protocol_set_device_status(
-                protocol,
-                device,
-                protocol_DeviceStatus_DEVICE_STATUS_ACTIVE,
-                "Failed to configure device");
-    }
-    else
-    {
-        protocol_set_device_status(
-                protocol,
-                device,
-                protocol_DeviceStatus_DEVICE_STATUS_READY,
-                "Device is ready.");
-    }
     return true;
 }
 
-/*******************************************************************************
+/******************************************************************************
 * Function Name: _start_streams
 ********************************************************************************
 * Summary:
@@ -428,25 +647,54 @@ static bool _configure_streams(protocol_t* protocol, int device, void* arg)
 *******************************************************************************/
 static void _start_streams(protocol_t* protocol, int device, pb_ostream_t* ostream, void* arg)
 {
-
-    UNUSED(ostream);
+    int rate_index;
+    int rate = 8;
+    int mode_index;
+    stream_mode_t mode;
     dev_dps368_t* dps = (dev_dps368_t*)arg;
-    clock_tick_t time = clock_get_tick();
+    UNUSED(ostream);
 
-    protocol_set_device_status(
+    protocol_get_option_oneof(protocol, device, DPS_OPTION_KEY_FREQUENCY, &rate_index);
+    switch(rate_index)
+    {
+        case 0: rate = 8; break;
+        case 1: rate = 16; break;
+        case 2: rate = 32; break;
+        case 3: rate = 64; break;
+        case 4: rate = 128; break;
+    }
+
+    protocol_get_option_oneof(protocol, device, DPS_OPTION_KEY_STREAM_MODE, &mode_index);
+    switch(mode_index)
+    {
+       case 0: mode = DPS_MODE_STREAM_COMBINED; break;
+       case 1: mode = DPS_MODE_STREAM_SPLIT; break;
+       case 2: mode = DPS_MODE_STREAM_ONLY_PRESSURE; break;
+       case 3: mode = DPS_MODE_STREAM_ONLY_TEMP; break;
+       default: return;
+    }
+
+    if(!_config_hw(dps, rate, mode, dps->i2c))
+    {
+        protocol_set_device_status(
+            protocol,
+            device,
+            protocol_DeviceStatus_DEVICE_STATUS_ERROR,
+            "Failed to configure hardware.");
+    }
+    else
+    {
+        protocol_set_device_status(
             protocol,
             device,
             protocol_DeviceStatus_DEVICE_STATUS_ACTIVE,
-            "Device is streaming");
-
-    /* Initialize this as the start time. One sample period will pass
-    * before the first sample is taken.
-    */
-    dps->sample_time_tick = time;
+            "Device is streaming.");
+    }
+    dps->sample_time_tick = clock_get_tick();
 
 }
 
-/*******************************************************************************
+/******************************************************************************
 * Function Name: _stop_streams
 ********************************************************************************
 * Summary:
@@ -461,18 +709,18 @@ static void _start_streams(protocol_t* protocol, int device, pb_ostream_t* ostre
 *******************************************************************************/
 static void _stop_streams(protocol_t* protocol, int device, pb_ostream_t* ostream, void* arg)
 {
-    UNUSED(arg);
+
     UNUSED(ostream);
 
     protocol_set_device_status(
-            protocol,
-            device,
-            protocol_DeviceStatus_DEVICE_STATUS_READY,
-            "Device stopped");
+        protocol,
+        device,
+        protocol_DeviceStatus_DEVICE_STATUS_READY,
+        "Device stopped");
+
 }
 
-
-/*******************************************************************************
+/******************************************************************************
 * Function Name: _write_payload
 ********************************************************************************
 * Summary:
@@ -498,21 +746,43 @@ static bool _write_payload(
     void* arg)
 {
     UNUSED(protocol);
-    UNUSED(stream_id);
     UNUSED(frame_count);
     UNUSED(protocol);
 
     dev_dps368_t* dps = (dev_dps368_t*)arg;
 
-    if (!pb_write(ostream, (const pb_byte_t *)dps->data_buffer, total_bytes))
+    switch(dps->stream_mode)
     {
-        return false;
-    }
+        case DPS_MODE_STREAM_COMBINED:
+        {
+            return pb_write(ostream, (const pb_byte_t *)dps->data_combined, total_bytes);
+        }
 
-    return true;
+        case DPS_MODE_STREAM_SPLIT:
+        {
+            float *frame = stream_id == 0 ? dps->pressure_data : dps->temperature_data;
+            return pb_write(ostream, (const pb_byte_t *)frame, total_bytes);
+        }
+
+        case DPS_MODE_STREAM_ONLY_PRESSURE:
+        {
+            return pb_write(ostream, (const pb_byte_t *)dps->pressure_data, total_bytes);
+        }
+
+        case DPS_MODE_STREAM_ONLY_TEMP:
+        {
+            return pb_write(ostream, (const pb_byte_t *)dps->temperature_data, total_bytes);
+        }
+
+        default:
+        {
+            return false;
+        }
+
+    }
 }
 
-/*******************************************************************************
+/******************************************************************************
 * Function Name: _poll_streams
 ********************************************************************************
 * Summary:
@@ -525,59 +795,69 @@ static bool _write_payload(
 *  arg: pointer the device struct (dev_dps368_t)
 *
 *******************************************************************************/
+
 static void _poll_streams(protocol_t* protocol, int device, pb_ostream_t* ostream, void* arg)
 {
-    cy_rslt_t result;
     dev_dps368_t* dps = (dev_dps368_t*)arg;
-
-    clock_tick_t time = clock_get_tick();
-
-    if(time >= dps->sample_time_tick + dps->period_tick )
+    clock_tick_t current_time = clock_get_tick();
+    /*Reinterpret this timing as the time we wish the sample to happen at*/
+    clock_tick_t current_treshold = dps->sample_time_tick;
+    clock_tick_t total_drift = current_time - current_treshold;
+    
+    /*If we are to late we skip this frame and save time.*/
+    /*Previous data package will be resent. */
+    bool late = false;
+    uint32_t drift_ms = (uint32_t)total_drift;
+    if (drift_ms > 200)
     {
-
-        /* Use a fixed calculation for when this tick should have happened.
-        * This also mean that the dps->sample_time_tick need to be initialized
-        * whenever a new streaming is started.
-        */
-        dps->sample_time_tick += dps->period_tick;
-
-        /* NOTE: In xensiv_dps3xx_read there is a call to _xensiv_dps3xx_read_raw_values
-         * which in turn calls _xensiv_dps3xx_wait_data_ready. This is not optimal
-         * and should be avoided. This may be the cause for some dropped packages.
-         * Dropped packages is a problem when the data rate is very high.
-         * Using a polling technique requires really good timing to synchronize.
-         * Check data ready above could be a solution but it also means that there will be
-         * a wait loop which have its own danger.
-         * It would be better to call mtb_xensiv_dps3xx_reg_read directly to minimize delays.
-         * Also for the future split of streams it is beneficial to have it here.
-         */
-
-        uint8_t read_reg_addr = XENSIV_DPS3XX_PSR_TMP_READ_REG_ADDR;
-        uint8_t read_reg_len = XENSIV_DPS3XX_PSR_TMP_READ_LEN;
-        uint8_t raw_value[XENSIV_DPS3XX_PSR_TMP_READ_LEN];
-
-        result = mtb_xensiv_dps3xx_reg_read(&dps->dps3xx, read_reg_addr, raw_value, read_reg_len);
-
-        int32_t press_raw = (int32_t)(raw_value[2]) + (raw_value[1] << 8) + (raw_value[0] << 16);
-        int32_t temp_raw = (int32_t)(raw_value[5]) + (raw_value[4] << 8) + (raw_value[3] << 16);
-        dps->data_buffer[0] = mtb_xensiv_dps3xx_calc_pressure(&dps->dps3xx, press_raw);
-        dps->data_buffer[1] = mtb_xensiv_dps3xx_calc_temperature(&dps->dps3xx, temp_raw);
-
-
-        if (result != CY_RSLT_SUCCESS)
+        /*Tens of microseconds. 200 is equal to 2 ms.*/
+        late=1;
+    }    
+    
+    /*The first sampling is now done as soon as possible.*/
+    if(current_time >= current_treshold )
+    {
+        /*If we are late.. Skip the reading of the sensor.*/
+        if ( late )
         {
-            printf("xensiv_dps3xx_read READ FAILED. Frame dropped!\r\n");
-            dps->dropped++;
+            late = false;
+
         }
         else
         {
-            protocol_send_data_chunk(protocol, device, 0, 1, dps->dropped, ostream, _write_payload);
-            dps->dropped = 0;
+            if(!_read_hw(dps,dps->i2c))
+            {
+                return;
+            }
+        }
+
+
+        /* This is updated whenever there is an _read_hw call! However since the _read_hw might fail
+        * and when we are resending the previous data we have to force this to 1 anyway.
+        */
+        dps->frames_sampled = 1;
+
+        /*Since we in reality dont drop any frames anymore.*/
+        dps->frames_dropped = 0;
+
+        /*When we should do the next frame.*/
+        dps->sample_time_tick += dps->period_tick;
+
+        /*Always send something.*/
+        {
+            protocol_send_data_chunk(protocol, device, 0, dps->frames_sampled, dps->frames_dropped, ostream, _write_payload);
+
+            if(dps->stream_mode == DPS_MODE_STREAM_SPLIT)
+                protocol_send_data_chunk(protocol, device, 1, dps->frames_sampled, dps->frames_dropped, ostream, _write_payload);
+
+            dps->frames_dropped = 0;
+            dps->frames_sampled = 0;
+
         }
     }
 }
 
-/*******************************************************************************
+/******************************************************************************
 * Function Name: dev_dps368_register
 ********************************************************************************
 * Summary:
@@ -594,7 +874,7 @@ static void _poll_streams(protocol_t* protocol, int device, pb_ostream_t* ostrea
 bool dev_dps368_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
 {
     int status;
-    i2c_context=i2c;
+
     dev_dps368_t* dps = (dev_dps368_t*)malloc(sizeof(dev_dps368_t));
     if(dps == NULL)
     {
@@ -602,7 +882,6 @@ bool dev_dps368_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
     }
 
     memset(dps, 0, sizeof(dev_dps368_t));
-    /* Initialize the DPS device with the provided I2C interface */
     if(!_init_hw(dps, i2c))
     {
         free(dps);
@@ -618,7 +897,6 @@ bool dev_dps368_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
         .data_received = NULL // has no input streams
     };
 
-    /* Add the DPS device to the protocol and get its device identifier */
     int device = protocol_add_device(
         protocol,
         protocol_DeviceType_DEVICE_TYPE_SENSOR,
@@ -631,7 +909,6 @@ bool dev_dps368_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
         return false;
     }
 
-    /* Add an option to configure the sampling frequency of the DPS device */
     status = protocol_add_option_oneof(
         protocol,
         device,
@@ -642,12 +919,28 @@ bool dev_dps368_register(protocol_t* protocol, mtb_hal_i2c_t* i2c)
         (const char* []) { "8 Hz", "16 Hz", "32 Hz", "64 Hz", "128 Hz" },
         5);
 
+
     if(status != PROTOCOL_STATUS_SUCCESS)
     {
         return false;
     }
 
-    /* Configure the data streams for the DPS device using the protocol */
+
+     status = protocol_add_option_oneof(
+        protocol,
+        device,
+        DPS_OPTION_KEY_STREAM_MODE,
+        "Mode",
+        "Stream Configuration",
+        0,
+        (const char* []) { "Combined", "Split", "Only Pressure", "Only Temperature" },
+        4);
+
+    if(PROTOCOL_STATUS_SUCCESS != status)
+    {
+        return false;
+    }
+
     if(!_configure_streams(protocol, device, manager.arg))
     {
         return false;

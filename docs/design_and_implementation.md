@@ -2,7 +2,7 @@
 
 ## Design and implementation
 
-This code example allows collecting data from either an IMU or PDM/PCM or BMM350 or DPS368 or SHT40T or radar using the [DEEPCRAFT&trade; streaming protocol v2](https://developer.imagimob.com/getting-started/tensor-streaming-protocol/registering-sensors-using-protocolv2). The application supports transmitting data over USB to the Streaming Protocol.
+This code example allows collecting data from either an IMU or PDM/PCM or BMM350 or DPS368 or SHT40T or RADAR using the [DEEPCRAFT&trade; streaming protocol v2](https://developer.imagimob.com/getting-started/tensor-streaming-protocol/registering-sensors-using-protocolv2). The application supports transmitting data over USB to the Streaming Protocol.
 
 The design of this application is minimalistic to get started with code examples on PSOC&trade; Edge MCU devices. All PSOC&trade; Edge E84 MCU applications have a dual-CPU three-project structure to develop code for the CM33 and CM55 cores. The CM33 core has two separate projects for the secure processing environment (SPE) and non-secure processing environment (NSPE). A project folder consists of various subfolders, each denoting a specific aspect of the project. The three project folders are as follows:
 
@@ -60,15 +60,16 @@ Frequency | 50 Hz, 100 Hz, 200 Hz, 400 Hz
 
 - Code example is designed to collect data from a XENSIV&trade; digital barometric air pressure (DPS368) sensor
 
-- Pressure data is read from the sensor over an I2C interface based on the configured data rate and then the data is transmitted over USB
+- Pressure and temperature data is read from the sensor over an I2C interface based on the configured data rate and then the data is transmitted over USB
 
  Supported configurations  |  Ranges
 :-------- | :-------------
 Frequency | 8 Hz, 16 Hz, 32 Hz, 64 Hz, 128 Hz
+Mode | Combined, Split, Only Pressure, Only Temperature
 
 ### Humidity capture
 
-- Code example is designed to collect data from a digital temperature and humidity sensor (SHT40T)
+- Code example is designed to collect data from a digital temperature and humidity sensor (SHT40)
 
 - Temperature and humidity data are read from the sensor over an I2C interface based on the configured data rate and then the data is transmitted over USB
 
