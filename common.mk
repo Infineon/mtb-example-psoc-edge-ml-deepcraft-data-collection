@@ -7,8 +7,8 @@
 #
 ################################################################################
 # \copyright
-# (c) 2025-2025, Infineon Technologies AG, or an affiliate of Infineon Technologies AG.
-# SPDX-License-Identifier: Apache-2.0
+# (c) 2025, Infineon Technologies AG, or an affiliate of Infineon
+# Technologies AG.  SPDX-License-Identifier: Apache-2.0
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,11 +51,20 @@ TOOLCHAIN=GCC_ARM
 # launch configurations for your IDE.
 CONFIG=Debug
 
-ifeq (APP_KIT_PSE84_AI, $(TARGET))
-DEFINES+=KIT_PSE84_AI
+# Option to remap the sensor orientation to align with PSOC 6 AI Evaluation Kit (CY8CKIT-062S2-AI).
+#
+# ENABLED   - Sensor data is remapped 
+#
+# DISABLED  - Actual sensor data 
+SENSOR_REMAPPING=ENABLED
+
+ifeq ($(SENSOR_REMAPPING),ENABLED)
+DEFINES+=USE_SENSOR_REMAPPING
 endif
 
-ifeq (APP_KIT_PSE84_AI, $(TARGET))
+ifeq ($(filter APP_KIT_PSE84_AI KIT_PSE84_AI, $(TARGET)), $(TARGET))
+DEFINES+=USE_KIT_PSE84_AI
+# Sensors on kit
 DEFINES+=IM_ENABLE_PDM_PCM
 DEFINES+=IM_ENABLE_BMI270
 DEFINES+=IM_ENABLE_DPS368
@@ -64,13 +73,17 @@ DEFINES+=IM_ENABLE_BGT60TRXX
 DEFINES+=IM_ENABLE_SHT4X
 endif
 
-ifeq (APP_KIT_PSE84_EVAL_EPC2, $(TARGET))
+ifeq ($(filter APP_KIT_PSE84_EVAL_EPC2 KIT_PSE84_EVAL_EPC2, $(TARGET)), $(TARGET))
+DEFINES+=USE_KIT_PSE84_EVAL_EPC2
+# Sensors on kit
 DEFINES+=IM_ENABLE_PDM_PCM
 DEFINES+=IM_ENABLE_BMI270
 DEFINES+=IM_ENABLE_BMM350
 endif
 
-ifeq (APP_KIT_PSE84_EVAL_EPC4, $(TARGET))
+ifeq ($(filter APP_KIT_PSE84_EVAL_EPC4 KIT_PSE84_EVAL_EPC4, $(TARGET)), $(TARGET))
+DEFINES+=USE_KIT_PSE84_EVAL_EPC4
+# Sensors on kit
 DEFINES+=IM_ENABLE_PDM_PCM
 DEFINES+=IM_ENABLE_BMI270
 DEFINES+=IM_ENABLE_BMM350

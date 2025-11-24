@@ -27,6 +27,9 @@ In the CM33 non-secure application, the clocks and system resources are initiali
 
 - Data consists of the 3-axis accelerometer and 3-axis gyroscope data obtained from the IMU. The data is read from the IMU over an I2C interface based on the configured data rate and then the data is transmitted over USB
 
+> **Note:**
+Use `SENSOR_REMAPPING` macro in the `common.mk` file to align sensor orienation with PSOC&trade; 6 AI Evaluation Kit (CY8CKIT-062S2-AI).
+
  Supported configurations  |  Ranges / Options
 :-------- | :-------------
 Frequency | 50 Hz, 100 Hz, 200 Hz, 400 Hz
@@ -51,6 +54,9 @@ Stereo (Mode) | Yes, No
 - Code example is designed to collect data from a magnetometer sensor (BMM350)
 
 - Data consists of the 3-axis magnetic field data obtained from the sensor. The data is read from the magnetometer over an I3C interface based on the configured data rate and then the data is transmitted over USB
+
+> **Note:**
+Use `SENSOR_REMAPPING` macro in the `common.mk` file to align sensor orienation with PSOC&trade; 6 AI Evaluation Kit (CY8CKIT-062S2-AI).
 
  Supported configurations  |  Ranges
 :-------- | :-------------

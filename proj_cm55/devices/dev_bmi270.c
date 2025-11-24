@@ -6,29 +6,33 @@
 * Related Document: See README.md
 *
 *******************************************************************************
-* (c) 2025-2025, Infineon Technologies AG, or an affiliate of Infineon Technologies AG. All rights reserved.
-* This software, associated documentation and materials ("Software") is owned by
-* Infineon Technologies AG or one of its affiliates ("Infineon") and is protected
-* by and subject to worldwide patent protection, worldwide copyright laws, and
-* international treaty provisions. Therefore, you may use this Software only as
-* provided in the license agreement accompanying the software package from which
-* you obtained this Software. If no license agreement applies, then any use,
-* reproduction, modification, translation, or compilation of this Software is
-* prohibited without the express written permission of Infineon.
-* Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
-* IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING,
-* BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF THIRD-PARTY RIGHTS AND
-* IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A SPECIFIC USE/PURPOSE OR
-* MERCHANTABILITY. Infineon reserves the right to make changes to the Software
-* without notice. You are responsible for properly designing, programming, and
-* testing the functionality and safety of your intended application of the
-* Software, as well as complying with any legal requirements related to its
-* use. Infineon does not guarantee that the Software will be free from intrusion,
-* data theft or loss, or other breaches ("Security Breaches"), and Infineon
-* shall have no liability arising out of any Security Breaches. Unless otherwise
-* explicitly approved by Infineon, the Software may not be used in any application
-* where a failure of the Product or any consequences of the use thereof can
-* reasonably be expected to result in personal injury.
+ * (c) 2025, Infineon Technologies AG, or an affiliate of Infineon
+ * Technologies AG. All rights reserved.
+ * This software, associated documentation and materials ("Software") is
+ * owned by Infineon Technologies AG or one of its affiliates ("Infineon")
+ * and is protected by and subject to worldwide patent protection, worldwide
+ * copyright laws, and international treaty provisions. Therefore, you may use
+ * this Software only as provided in the license agreement accompanying the
+ * software package from which you obtained this Software. If no license
+ * agreement applies, then any use, reproduction, modification, translation, or
+ * compilation of this Software is prohibited without the express written
+ * permission of Infineon.
+ *
+ * Disclaimer: UNLESS OTHERWISE EXPRESSLY AGREED WITH INFINEON, THIS SOFTWARE
+ * IS PROVIDED AS-IS, WITH NO WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ * INCLUDING, BUT NOT LIMITED TO, ALL WARRANTIES OF NON-INFRINGEMENT OF
+ * THIRD-PARTY RIGHTS AND IMPLIED WARRANTIES SUCH AS WARRANTIES OF FITNESS FOR A
+ * SPECIFIC USE/PURPOSE OR MERCHANTABILITY.
+ * Infineon reserves the right to make changes to the Software without notice.
+ * You are responsible for properly designing, programming, and testing the
+ * functionality and safety of your intended application of the Software, as
+ * well as complying with any legal requirements related to its use. Infineon
+ * does not guarantee that the Software will be free from intrusion, data theft
+ * or loss, or other breaches ("Security Breaches"), and Infineon shall have
+ * no liability arising out of any Security Breaches. Unless otherwise
+ * explicitly approved by Infineon, the Software may not be used in any
+ * application where a failure of the Product or any consequences of the use
+ * thereof can reasonably be expected to result in personal injury.
 *******************************************************************************/
 
 #ifdef IM_ENABLE_BMI270
@@ -155,6 +159,8 @@ static bool _config_hw(
         int accel_range,
         int gyro_range,
         stream_mode_t mode);
+        
+void imu_remap_sensor_orientation(struct bmi2_sens_axes_data *data);
 
 static bool _read_hw(dev_bmi270_t* dev);
 
@@ -453,8 +459,15 @@ static bool _read_hw(dev_bmi270_t* dev)
 {
     cy_rslt_t result;
     mtb_bmi270_data_t bmi270_data;
-
     result = mtb_bmi270_read(&(imu), &bmi270_data);
+    
+#ifdef USE_SENSOR_REMAPPING    
+    /* Remapping the accelerometer data based on orientation of sensor */
+    imu_remap_sensor_orientation(&(bmi270_data.sensor_data.acc));
+    
+    /* Remapping the gyroscope data based on orientation of sensor */
+    imu_remap_sensor_orientation(&(bmi270_data.sensor_data.gyr));
+#endif
 
     if(CY_RSLT_SUCCESS != result)
     {
@@ -508,6 +521,26 @@ static bool _read_hw(dev_bmi270_t* dev)
     dev->frames_sampled++;
 
     return true;
+}
+
+/*******************************************************************************
+* Function Name: imu_remap_sensor_orientation
+********************************************************************************
+* Summary:
+* Remapping the sensor data to match with CY8CKIT-062S2-AI orientation.
+*
+* Parameters:
+* data: pointer IMU Sensors data
+*
+* Return:
+* None
+*
+*******************************************************************************/
+void imu_remap_sensor_orientation(struct bmi2_sens_axes_data *data)
+{
+    /* remapping the data */ 
+    data->x = -(data->x);
+    data->y = -(data->y);    
 }
 
 /******************************************************************************

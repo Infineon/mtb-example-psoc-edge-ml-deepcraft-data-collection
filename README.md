@@ -16,7 +16,7 @@ This code example has a three project structure: CM33 secure, CM33 non-secure, a
 
 [View this README on GitHub.](https://github.com/Infineon/mtb-example-psoc-edge-ml-deepcraft-data-collection)
 
-[Provide feedback on this code example.](https://cypress.co1.qualtrics.com/jfe/form/SV_1NTns53sK2yiljn?Q_EED=eyJVbmlxdWUgRG9jIElkIjoiQ0UyMzkyNDciLCJTcGVjIE51bWJlciI6IjAwMi0zOTI0NyIsIkRvYyBUaXRsZSI6IlBTT0MmdHJhZGU7IEVkZ2UgTUNVOiBNYWNoaW5lIExlYXJuaW5nIOKAkyBERUVQQ1JBRlQmdHJhZGU7IGRhdGEgY29sbGVjdGlvbiIsInJpZCI6Im5pY2hvbGFzIHNoYXJwIiwiRG9jIHZlcnNpb24iOiIyLjEuMCIsIkRvYyBMYW5ndWFnZSI6IkVuZ2xpc2giLCJEb2MgRGl2aXNpb24iOiJNQ0QiLCJEb2MgQlUiOiJJQ1ciLCJEb2MgRmFtaWx5IjoiUFNPQyJ9)
+[Provide feedback on this code example.](https://cypress.co1.qualtrics.com/jfe/form/SV_1NTns53sK2yiljn?Q_EED=eyJVbmlxdWUgRG9jIElkIjoiQ0UyMzkyNDciLCJTcGVjIE51bWJlciI6IjAwMi0zOTI0NyIsIkRvYyBUaXRsZSI6IlBTT0MmdHJhZGU7IEVkZ2UgTUNVOiBNYWNoaW5lIExlYXJuaW5nIOKAkyBERUVQQ1JBRlQmdHJhZGU7IGRhdGEgY29sbGVjdGlvbiIsInJpZCI6Im5pY2hvbGFzLnNoYXJwQGluZmluZW9uLmNvbSIsIkRvYyB2ZXJzaW9uIjoiMi4yLjAiLCJEb2MgTGFuZ3VhZ2UiOiJFbmdsaXNoIiwiRG9jIERpdmlzaW9uIjoiTUNEIiwiRG9jIEJVIjoiSUNXIiwiRG9jIEZhbWlseSI6IlBTT0MifQ==)
 
 See the [Design and implementation](docs/design_and_implementation.md) for the functional description of this code example.
 
@@ -117,8 +117,9 @@ Kit  |  Available sensors
     To ensure the optimal performance and the data integrity when working with sensors, consider the following guidelines:<br>
     <b>1. Enabling Sensors:</b> When enabling all sensors simultaneously, it is recommended to initialize them with their default frequency or minimum frequency. This helps prevent potential data loss due to excessive data streams. By starting with a minimal data frequency, you can ensure that the DEEPCRAFT&trade; Studio runs smoothly.<br>
     <b>2. Sensor Readings:</b> 
-    The sensor readings are relative to the board temperature and not relative to the ambient temperature. Since KIT_PSE84_AI has a smaller form-factor, it generates more heat on the board compared to KIT_PSE84_EVAL_EPC2 / KIT_PSE84_EVAL_EPC4. Therefore, you may notice a slight difference in the sensor readings between these kits. Care must be taken when porting the models the across the boards to compensate any deviation in the sensor readings.
-    
+    <br> a. The sensor readings are relative to the board temperature and not relative to the ambient temperature. Since KIT_PSE84_AI has a smaller form-factor, it generates more heat on the board compared to KIT_PSE84_EVAL_EPC2 / KIT_PSE84_EVAL_EPC4. Therefore, you may notice a slight difference in the sensor readings between these kits. Care must be taken when porting the models the across the boards to compensate any deviation in the sensor readings.
+    <br> b. By default, the orientation of the BMI270 and BMM350 sensors is aligned with the PSOC&trade; 6 AI Evaluation Kit (CY8CKIT-062S2-AI). To disable this alignment, set the `SENSOR_REMAPPING` macro to `DISABLED` in the common.mk file.
+
 ## Status LED codes
 
 
@@ -188,6 +189,7 @@ Document title: *CE239247* – *PSOC&trade; Edge MCU: Machine Learning – DEEPC
  1.x.0   | New code example <br> Early access release
  2.0.0   | GitHub release <br>
  2.1.0   | Enabled selection of either pressure or temperature or both data while streaming DPS368 sensor data <br>Added support for SHT40 Sensor
+ 2.2.0   | Aligned BMI270 and BMM350 sensor orientation with PSOC&trade; 6 AI Evaluation Kit (CY8CKIT-062S2-AI)
 <br>
 
 
